@@ -1,0 +1,16 @@
+﻿{
+    "Author": "Le Vagabond",
+    "Name": "AutoDismount",
+    "InternalName": "autodismount",
+    "AssemblyVersion": "0.0.0.1",
+    "Description": "Automatically dismounts your character when you attempt to use an action",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/Le-Vagabond-gh/ffxiv_autodismount",
+    "DalamudApiLevel": 14,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": false,
+    "LoadPriority": 0,
+    "Punchline": "Why dismount manually when you can have it done for you?",
+    "AcceptsFeedback": true
+}
