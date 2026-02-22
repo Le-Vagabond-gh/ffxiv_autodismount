@@ -3,6 +3,8 @@ using Dalamud.Hooking;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using System;
 
 namespace autodismount
@@ -49,10 +51,24 @@ namespace autodismount
 
                     if (isMounted || isRidingPillion)
                     {
+                        // Skip if this isn't a real player mount (FATE vehicles, cosmic mechs, etc.)
+                        if (!IsPlayerMount())
+                        {
+                            Service.PluginLog.Info($"Skipping auto-dismount: not a real player mount");
+                            return this.useActionHook!.Original(self, actionType, actionID, targetID, a4, a5, a6, a7);
+                        }
+
                         Service.PluginLog.Info($"Auto-dismounting: Action {actionID} blocked while mounted (status {actionStatus})");
 
-                        // Dismount by using the Mount action (General Action ID 9)
-                        self->UseAction(ActionType.GeneralAction, 9, 0xE0000000, 0, 0, 0, null);
+                        try
+                        {
+                            // Dismount by using the Mount action (General Action ID 9)
+                            self->UseAction(ActionType.GeneralAction, 9, 0xE0000000, 0, 0, 0, null);
+                        }
+                        catch (Exception ex)
+                        {
+                            Service.PluginLog.Error(ex, "Error during dismount action");
+                        }
 
                         // Don't execute the original blocked action - it will fail anyway
                         return false;
@@ -66,6 +82,24 @@ namespace autodismount
 
             // CRITICAL: Always call Original with untouched arguments
             return this.useActionHook!.Original(self, actionType, actionID, targetID, a4, a5, a6, a7);
+        }
+
+        private unsafe bool IsPlayerMount()
+        {
+            // Cosmic mech has a dedicated condition flag
+            if (Service.Condition[ConditionFlag.PilotingMech])
+                return false;
+
+            // Check if the current mount is one the player actually owns
+            var localPlayer = (Character*)Service.ClientState.LocalPlayer?.Address;
+            if (localPlayer == null)
+                return false;
+
+            var mountId = localPlayer->Mount.MountId;
+            if (mountId == 0)
+                return false;
+
+            return PlayerState.Instance()->IsMountUnlocked(mountId);
         }
 
         public void Dispose()

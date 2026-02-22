@@ -55,8 +55,21 @@ jobs:
           else
             TAG="v$(date +'%Y%m%d%H%M%S')-${GITHUB_SHA::7}"
           fi
-          gh release create "$TAG" \
-            autodismount/bin/Release/autodismount.dll \
-            autodismount/bin/Release/autodismount.json \
-            --generate-notes \
-            --title "Release $TAG"
+
+          # Get the previous tag for --notes-start-tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            gh release create "$TAG" \
+              autodismount/bin/Release/autodismount.dll \
+              autodismount/bin/Release/autodismount.json \
+              --generate-notes \
+              --notes-start-tag "$PREV_TAG" \
+              --title "Release $TAG"
+          else
+            gh release create "$TAG" \
+              autodismount/bin/Release/autodismount.dll \
+              autodismount/bin/Release/autodismount.json \
+              --generate-notes \
+              --title "Release $TAG"
+          fi
