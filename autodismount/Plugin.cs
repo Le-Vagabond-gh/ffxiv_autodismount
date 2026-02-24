@@ -1,6 +1,7 @@
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Plugin;
+using Dalamud.Plugin.Ipc;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -18,12 +19,20 @@ namespace autodismount
         private unsafe delegate bool UseActionDelegate(ActionManager* self, ActionType actionType, uint actionID, ulong targetID, uint a4, uint a5, uint a6, void* a7);
         private Hook<UseActionDelegate>? useActionHook;
 
+        // vnavmesh IPC
+        private ICallGateSubscriber<bool>? vnavIsRunning;
+        private ICallGateSubscriber<bool>? vnavPathfindInProgress;
+
         public unsafe Plugin(IDalamudPluginInterface pluginInterface)
         {
             this.PluginInterface = pluginInterface;
             this.PluginInterface.Create<Service>(this);
             this.Configuration = this.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
             this.Configuration.Initialize(this.PluginInterface);
+
+            // vnavmesh IPC - subscribing is safe even if vnavmesh isn't installed
+            this.vnavIsRunning = this.PluginInterface.GetIpcSubscriber<bool>("vnavmesh.Path.IsRunning");
+            this.vnavPathfindInProgress = this.PluginInterface.GetIpcSubscriber<bool>("vnavmesh.SimpleMove.PathfindInProgress");
 
             // Hook ActionManager.UseAction
             this.useActionHook = Service.GameInteropProvider.HookFromAddress<UseActionDelegate>(
@@ -51,6 +60,13 @@ namespace autodismount
 
                     if (isMounted || isRidingPillion)
                     {
+                        // Skip if vnavmesh is actively pathing (another plugin is controlling movement)
+                        if (IsVnavmeshPathing())
+                        {
+                            Service.PluginLog.Info($"Skipping auto-dismount: vnavmesh is actively pathing");
+                            return this.useActionHook!.Original(self, actionType, actionID, targetID, a4, a5, a6, a7);
+                        }
+
                         // Skip if this isn't a real player mount (FATE vehicles, cosmic mechs, etc.)
                         if (!IsPlayerMount())
                         {
@@ -82,6 +98,22 @@ namespace autodismount
 
             // CRITICAL: Always call Original with untouched arguments
             return this.useActionHook!.Original(self, actionType, actionID, targetID, a4, a5, a6, a7);
+        }
+
+        private bool IsVnavmeshPathing()
+        {
+            try
+            {
+                if (this.vnavIsRunning != null && this.vnavIsRunning.InvokeFunc())
+                    return true;
+                if (this.vnavPathfindInProgress != null && this.vnavPathfindInProgress.InvokeFunc())
+                    return true;
+            }
+            catch
+            {
+                // vnavmesh not installed or IPC unavailable - that's fine
+            }
+            return false;
         }
 
         private unsafe bool IsPlayerMount()
