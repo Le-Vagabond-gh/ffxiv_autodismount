@@ -123,7 +123,7 @@ namespace autodismount
                 return false;
 
             // Check if the current mount is one the player actually owns
-            var localPlayer = (Character*)Service.ClientState.LocalPlayer?.Address;
+            var localPlayer = (Character*)Service.ObjectTable.LocalPlayer?.Address;
             if (localPlayer == null)
                 return false;
 
